@@ -1,36 +1,50 @@
-# Wheelzone Core — System Docs (Bot1 + Bot2 + SQLite)
+# WZCore — System Documentation
 
-This repository contains **documentation artifacts** for a production messaging pipeline implemented as **Bot1 + Bot2 + SQLite**.
-The documents are **facts-only** and describe the current operational state.
+WZCore is a deterministic message processing and dispatch pipeline implemented as Bot1 + Bot2 + SQLite.
 
-## Documents
+This repository contains:
+- Technical documentation (facts-only)
+- Runtime snapshot of the production structure
+- systemd unit configuration used in deployment
 
-- `docs/System_Overview.md` — authoritative technical overview (facts only)
-- `docs/Delivery_State_Machine.md` — formal RFC-style delivery state machine (authoritative)
-- `docs/diagrams/sequence.mmd` — Mermaid sequence diagram for end-to-end processing
+The repository is intentionally domain-agnostic.
 
-## System Shape
-```text
-[Inbound Platform/API]
-        |
-        v
-     (Bot1)
-  normalize + persist
-        |
-        v
-     SQLite DB
-  events + delivery
-        |
-        v
-     (Bot2)
- claim/lease + dispatch
-        |
-        v
-[Delivery Channels]
-```
+## Components
 
-## Mermaid
+Bot1  
+- Ingests inbound events  
+- Normalizes payloads  
+- Persists events into SQLite  
 
-To render the diagram:
-- open `docs/diagrams/sequence.mmd` in any Mermaid-compatible viewer/editor.
+SQLite  
+- Durable storage layer  
+- Events table  
+- Delivery table  
+- Explicit state transitions  
+
+Bot2  
+- Claims delivery tasks  
+- Applies lease mechanism  
+- Dispatches to delivery channels  
+- Handles retries  
+
+## Repository Layout
+
+src/opt/max-bot1/  
+Runtime snapshot of Bot1  
+
+src/opt/max-bot2/  
+Runtime snapshot of Bot2  
+
+deploy_systemd/  
+Production service definitions  
+
+docs/  
+System documentation and state machine specification  
+
+## Versioning
+
+VERSION — current version marker  
+CHANGELOG.md — change history  
+LICENSE — licensing information  
 
