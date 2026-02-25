@@ -2,18 +2,19 @@ PY?=python3
 VENV=.venv
 PIP=$(VENV)/bin/pip
 PYV=$(VENV)/bin/python
-RUFF=$(VENV)/bin/ruff
+FLAKE8=$(VENV)/bin/flake8
 PYTEST=$(VENV)/bin/pytest
 
 .PHONY: setup lint test run clean
 
 setup:
-	$(PY) -m pip install -U pip virtualenv
+	$(PY) -m pip install -U virtualenv
 	$(PY) -m virtualenv $(VENV)
+	$(PIP) install -U pip
 	$(PIP) install -r requirements.txt
 
 lint:
-	$(RUFF) check src tests
+	PYTHONPATH=src $(FLAKE8) src tests
 
 test:
 	PYTHONPATH=src $(PYTEST) -q
