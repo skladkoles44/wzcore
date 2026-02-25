@@ -14,7 +14,7 @@ setup:
 	$(PIP) install -r requirements.txt
 
 lint:
-	PYTHONPATH=src $(FLAKE8) src tests
+	PYTHONPATH=src $(FLAKE8) src/wzcore_sandbox tests
 
 test:
 	PYTHONPATH=src $(PYTEST) -q
