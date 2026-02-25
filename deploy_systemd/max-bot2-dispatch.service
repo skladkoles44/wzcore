@@ -1,0 +1,25 @@
+[Unit]
+Description=MAX Bot2 Dispatch Worker
+After=network.target
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+[Service]
+User=max_bot2
+Group=max_dispatch
+WorkingDirectory=/opt/max-bot2/app
+EnvironmentFile=/etc/max-bot2/max-bot2-dispatch.env
+ExecStartPre=/usr/bin/test -r /etc/max-bot2/max-bot2-dispatch.env
+ExecStartPre=/usr/bin/test -r /var/lib/max-bot1/bot.db
+ExecStart=/opt/max-bot2/venv/bin/python3 /opt/max-bot2/app/bot2_dispatch_runner.py
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/max-bot2 /var/lib/max-bot1 /run
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,191 @@
+import os
+import time
+import sqlite3
+import asyncio
+import logging
+import httpx
+
+logger = logging.getLogger("max-bot")
+
+DB_PATH = os.getenv("DB_PATH", "/var/lib/max-bot1/bot.db")
+
+TG_ALERT_TOKEN = os.getenv("TG_ALERT_TOKEN", "").strip()
+TG_ALERT_CHAT_ID = os.getenv("TG_ALERT_CHAT_ID", "").strip()
+
+MAX_BATCH = int(os.getenv("NOTIFY_MAX_BATCH", "20"))
+SLEEP_SEC = float(os.getenv("NOTIFY_DISPATCH_SLEEP_SEC", "1.0"))
+MAX_ATTEMPTS = int(os.getenv("NOTIFY_MAX_ATTEMPTS", "10"))
+
+_task: asyncio.Task | None = None
+_http: httpx.AsyncClient | None = None
+
+
+def _connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH, timeout=3)
+    conn.execute("PRAGMA busy_timeout=3000;")
+    return conn
+
+
+def _pick_batch(channel: str, limit: int) -> list[dict]:
+    """
+    Atomically claim rows:
+      new -> processing, attempts += 1
+    """
+    now = time.time()
+    conn = _connect()
+    try:
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+
+        cur.execute(
+            """
+            SELECT d.id, d.event_id, d.channel, d.recipient_id, d.attempts, e.notify_text
+            FROM delivery d
+            JOIN events e ON e.event_id = d.event_id
+            WHERE d.channel = ?
+              AND d.status = 'new'
+            ORDER BY d.created_ts ASC
+            LIMIT ?
+            """,
+            (channel, int(limit)),
+        )
+        rows = cur.fetchall()
+
+        ids = [r[0] for r in rows]
+        if ids:
+            cur.executemany(
+                """
+                UPDATE delivery
+                SET status='processing',
+                    attempts=COALESCE(attempts,0)+1,
+                    updated_ts=?
+                WHERE id=?
+                  AND status='new'
+                """,
+                [(now, i) for i in ids],
+            )
+
+        conn.commit()
+
+        out = []
+        for r in rows:
+            out.append(
+                {
+                    "id": int(r[0]),
+                    "event_id": str(r[1]),
+                    "channel": str(r[2]),
+                    "recipient_id": str(r[3]),
+                    "attempts": int(r[4] or 0),
+                    "text": str(r[5] or ""),
+                }
+            )
+        return out
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
+
+
+def _set_status(delivery_id: int, status: str) -> None:
+    now = time.time()
+    conn = _connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE delivery SET status=?, updated_ts=? WHERE id=?",
+            (status, now, int(delivery_id)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+async def _send_tg(text: str) -> None:
+    if not TG_ALERT_TOKEN or not TG_ALERT_CHAT_ID:
+        raise RuntimeError("TG_ALERT_TOKEN or TG_ALERT_CHAT_ID missing")
+
+    global _http
+    if _http is None:
+        _http = httpx.AsyncClient(timeout=10)
+
+    url = f"https://api.telegram.org/bot{TG_ALERT_TOKEN}/sendMessage"
+    payload = {"chat_id": TG_ALERT_CHAT_ID, "text": text}
+    r = await _http.post(url, json=payload)
+    if r.status_code != 200:
+        raise RuntimeError(f"tg send failed status={r.status_code} body={r.text[:200]}")
+
+
+async def _loop(send_max_func):
+    """
+    send_max_func(text: str, chat_id: int) -> awaitable
+    """
+    logger.info("notify_dispatch: start max_batch=%s sleep=%s max_attempts=%s", MAX_BATCH, SLEEP_SEC, MAX_ATTEMPTS)
+
+    while True:
+        try:
+            any_work = False
+
+            # MAX channel
+            for item in _pick_batch("max", MAX_BATCH):
+                any_work = True
+                did = item["id"]
+                try:
+                    chat_id = int(item["recipient_id"])
+                    await send_max_func(item["text"], chat_id)
+                    _set_status(did, "sent")
+                except Exception:
+                    # attempts already incremented in claim
+                    attempts = item["attempts"] + 1
+                    if attempts >= MAX_ATTEMPTS:
+                        _set_status(did, "dead")
+                    else:
+                        _set_status(did, "new")
+                    logger.exception("notify_dispatch: MAX failed delivery_id=%s attempts=%s", did, attempts)
+
+            # TG channel
+            for item in _pick_batch("tg", MAX_BATCH):
+                any_work = True
+                did = item["id"]
+                try:
+                    await _send_tg(item["text"])
+                    _set_status(did, "sent")
+                except Exception:
+                    attempts = item["attempts"] + 1
+                    if attempts >= MAX_ATTEMPTS:
+                        _set_status(did, "dead")
+                    else:
+                        _set_status(did, "new")
+                    logger.exception("notify_dispatch: TG failed delivery_id=%s attempts=%s", did, attempts)
+
+            await asyncio.sleep(SLEEP_SEC if any_work else max(SLEEP_SEC, 1.0))
+        except asyncio.CancelledError:
+            logger.info("notify_dispatch: cancelled")
+            raise
+        except Exception:
+            logger.exception("notify_dispatch: loop error")
+            await asyncio.sleep(1.0)
+
+
+def start_notify_dispatch(send_max_func) -> None:
+    global _task
+    if _task and not _task.done():
+        return
+    _task = asyncio.create_task(_loop(send_max_func))
+
+
+async def stop_notify_dispatch() -> None:
+    global _task, _http
+    if _task:
+        _task.cancel()
+        try:
+            await _task
+        except asyncio.CancelledError:
+            pass
+        _task = None
+    if _http is not None:
+        await _http.aclose()
+        _http = None

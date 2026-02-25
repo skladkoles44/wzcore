@@ -1,0 +1,33 @@
+[Unit]
+Description=max-bot-retention.service - MAX Bot retention purge (SQLite)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/max-bot2/venv/bin/python3 /opt/max-bot2/app/retention_purge.py
+
+# "sale default": guard enabled (can override to 0)
+Environment=DB_PATH=/var/lib/max-bot1/bot.db
+Environment=RETENTION_DAYS=365
+Environment=BACKUP_GLOB=/var/lib/max-bot1/bot.db.bak.*
+Environment=BACKUP_RETENTION_DAYS=365
+
+# Guard: fail if last successful purge older than 36h
+Environment=MAX_STAMP_AGE_SEC=129600
+Environment=STAMP_PATH=/var/lib/max-bot1/retention.last_ok.ts
+
+# Safety/locks
+Environment=DRYRUN=0
+Environment=SQLITE_TIMEOUT_SEC=10
+Environment=BUSY_TIMEOUT_MS=10000
+Environment=BEGIN_MODE=IMMEDIATE
+Environment=DO_VACUUM=0
+
+# Hardening (cheap)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/max-bot1
+

@@ -1,0 +1,34 @@
+[Unit]
+StartLimitBurst=5
+StartLimitIntervalSec=300
+Description=MAX Bot1 (FastAPI)
+After=network.target
+OnFailure=max-bot1-failnotify@%n.service max-bot1-startlimit-alert.service
+
+[Service]
+User=max_bot1
+WorkingDirectory=/opt/max-bot1/app
+EnvironmentFile=/etc/max-bot1/max-bot1.env
+
+# Run pre-steps as root (so "chown" cannot randomly fail)
+PermissionsStartOnly=true
+
+# Cheap protection against the exact CHDIR/permissions failure you hit
+ExecStartPre=/usr/bin/chown -R max_bot1:max_bot1 /opt/max-bot1/app /opt/max-bot1/backups /var/lib/max-bot1
+ExecStartPre=/usr/bin/test -x /opt/max-bot1/app
+ExecStartPre=/usr/bin/test -r /etc/max-bot1/max-bot1.env
+ExecStartPre=/usr/bin/test -r /opt/max-bot1/app/app.py
+ExecStartPre=/usr/bin/test -r /var/lib/max-bot1/bot.db
+
+ExecStart=/opt/max-bot1/app/venv/bin/python3 -m uvicorn app:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/max-bot1 /var/lib/max-bot1 /run
+
+[Install]
+WantedBy=multi-user.target
