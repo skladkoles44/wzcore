@@ -1,0 +1,29 @@
+sequenceDiagram
+  autonumber
+  participant MAX as MAX Platform
+  participant B1 as Bot1 (Producer)
+  participant DB as SQLite (/var/lib/max-bot1/bot.db)
+  participant B2 as Bot2 (Dispatch Worker)
+  participant TG as Telegram Bot API
+
+  MAX->>B1: inbound message webhook
+  B1->>B1: normalize + build notify_text
+  B1->>DB: INSERT events (fact)
+  B1->>DB: INSERT delivery (tasks: TG + MAX)
+  Note over B1,DB: Bot1 does not send, no retries
+
+  loop dispatch loop
+    B2->>DB: claim_batch (new -> processing, claim_id, claim_ts)
+    alt lease timeout path
+      B2->>DB: lease_timeout: processing(old claim_ts) -> new
+      Note over B2,DB: log "lease_timeout released=.. lease_sec=.."
+    end
+    B2->>TG: sendMessage
+    B2->>MAX: send to user_id
+    alt success
+      B2->>DB: set_status sent (attempts++)
+      Note over B2,DB: claim_id must match DB to update exactly 1 row
+    else error
+      B2->>DB: attempts++ / retry or dead
+    end
+  end
