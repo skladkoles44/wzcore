@@ -1,2 +1,5 @@
 *.bak.*
 *.broken.*
+.venv/
+__pycache__/
+.pytest_cache/
