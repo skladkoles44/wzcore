@@ -8,8 +8,8 @@ PYTEST=$(VENV)/bin/pytest
 .PHONY: setup lint test run clean
 
 setup:
-	$(PY) -m venv $(VENV)
-	$(PIP) install -U pip
+	$(PY) -m pip install -U pip virtualenv
+	$(PY) -m virtualenv $(VENV)
 	$(PIP) install -r requirements.txt
 
 lint:
