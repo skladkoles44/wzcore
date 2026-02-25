@@ -1,50 +1,32 @@
-# WZCore — System Documentation
-
-WZCore is a deterministic message processing and dispatch pipeline implemented as Bot1 + Bot2 + SQLite.
+# WZCore — Deterministic Message Processing & Dispatch (Bot1 + Bot2 + SQLite)
 
 This repository contains:
-- Technical documentation (facts-only)
-- Runtime snapshot of the production structure
-- systemd unit configuration used in deployment
+- **facts-only docs** of the system behavior (state machine + flows)
+- **deploy artifacts** (systemd units)
+- **runtime snapshot** of the currently running implementation (Bot1/Bot2)
 
-The repository is intentionally domain-agnostic.
+It is intentionally **domain-agnostic**: it documents *mechanics*, not *business*.
 
-## Components
+## What you will find here
 
-Bot1  
-- Ingests inbound events  
-- Normalizes payloads  
-- Persists events into SQLite  
+- `src/opt/max-bot1/` — Bot1 runtime snapshot (ingest/normalize/persist)
+- `src/opt/max-bot2/` — Bot2 runtime snapshot (claim/lease/retry/dispatch)
+- `deploy_systemd/` — systemd units used in production
+- `docs/` — authoritative docs (overview + RFC-style delivery state machine)
 
-SQLite  
-- Durable storage layer  
-- Events table  
-- Delivery table  
-- Explicit state transitions  
+## Proof points (engineering)
 
-Bot2  
-- Claims delivery tasks  
-- Applies lease mechanism  
-- Dispatches to delivery channels  
-- Handles retries  
+- SQLite-backed durability (events + delivery tables)
+- deterministic retry scheduling (e.g. `next_retry_ts`)
+- lease/claim model for safe dispatch
+- retention worker/timer
 
-## Repository Layout
+## Quick start
 
-src/opt/max-bot1/  
-Runtime snapshot of Bot1  
+See: `QUICKSTART.md`
 
-src/opt/max-bot2/  
-Runtime snapshot of Bot2  
+## Versioning / IP
 
-deploy_systemd/  
-Production service definitions  
-
-docs/  
-System documentation and state machine specification  
-
-## Versioning
-
-VERSION — current version marker  
-CHANGELOG.md — change history  
-LICENSE — licensing information  
-
+- `VERSION` — current version marker
+- `CHANGELOG.md` — change log
+- `LICENSE` — IP/license statement
