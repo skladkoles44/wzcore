@@ -116,7 +116,7 @@ def runtime_handle(ev: RuntimeEvent) -> dict:
             "is_new": 0,
             "transitions": [{"from": t.frm.value, "to": t.to.value} for t in sm.transitions],
             "is_duplicate": True,
-    }
+        }
     # deterministic progression
     if sm.state == State.INIT:
         sm.step(State.PROCESSING)
