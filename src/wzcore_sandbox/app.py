@@ -110,13 +110,14 @@ def runtime_handle(ev: RuntimeEvent) -> dict:
 
     # exactly-once-ish: if already SUCCESS -> return stable result
     if sm.state == State.SUCCESS:
-        return {
+        res = {
             "event_id": ev.event_id,
             "state": sm.state.value,
             "is_new": 0,
             "transitions": [{"from": t.frm.value, "to": t.to.value} for t in sm.transitions],
             "is_duplicate": True,
         }
+        return res
     # deterministic progression
     if sm.state == State.INIT:
         sm.step(State.PROCESSING)
@@ -135,10 +136,11 @@ def runtime_handle(ev: RuntimeEvent) -> dict:
 
     _persist(ev.event_id, sm)
 
-    return {
+    res = {
         "event_id": ev.event_id,
         "state": sm.state.value,
         "is_new": 1,
         "transitions": [{"from": t.frm.value, "to": t.to.value} for t in sm.transitions],
         "is_duplicate": False,
     }
+    return res
