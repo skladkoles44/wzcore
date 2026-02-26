@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag / Release version (e.g. v0.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout (full history for tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create & push annotated tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Tag already exists: $VERSION"
+            exit 0
+          fi
+          git tag -a "$VERSION" -m "$VERSION"
+          git push origin "$VERSION"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          gh release view "$VERSION" >/dev/null 2>&1 && { echo "Release exists: $VERSION"; exit 0; }
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --notes "Automated release for $VERSION (commit $(git rev-parse --short HEAD))."
+
+      - name: Comment + close milestone issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          nums="$(gh issue list --repo "$REPO" --milestone "$VERSION" --state open --json number --jq '.[].number')"
+          if [ -z "${nums}" ]; then
+            echo "No open issues in milestone: $VERSION"
+            exit 0
+          fi
+
+          head="$(git rev-parse HEAD)"
+          for n in $nums; do
+            gh issue comment "$n" --repo "$REPO" --body "Implemented in code + tests (commit ${head}). Released as ${VERSION}."
+            gh issue close "$n" --repo "$REPO"
+          done
+
+          echo "Closed issues: $nums"
