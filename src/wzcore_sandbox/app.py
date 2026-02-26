@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
 from .state_machine import DeterministicStateMachine, State, Transition
-app = FastAPI(title="WZCore Sandbox", version="0.2.1")
+app = FastAPI(title="WZCore Sandbox", version="0.2.2")
 
 _boot_ts = time.time()
 

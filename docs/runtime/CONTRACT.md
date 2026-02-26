@@ -1,5 +1,4 @@
-# WZCORE Runtime Contract (v0.2.1)
-
+# WZCORE Runtime Contract (v0.2.2)
 This document defines the public runtime contract for the sandbox package:
 - Event envelope (inputs)
 - Deterministic processing and invariants
