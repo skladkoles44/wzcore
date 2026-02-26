@@ -30,3 +30,7 @@ See: `QUICKSTART.md`
 - `VERSION` — current version marker
 - `CHANGELOG.md` — change log
 - `LICENSE` — IP/license statement
+
+## Runtime Contract
+
+See: docs/runtime/CONTRACT.md
