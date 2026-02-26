@@ -109,7 +109,7 @@ def runtime_handle(ev: RuntimeEvent) -> dict:
     sm = _replay(stored.transitions) if stored else DeterministicStateMachine()
 
     # exactly-once-ish: if already SUCCESS -> return stable result
-    if stored and sm.state == State.SUCCESS:
+    if stored and sm.state == State.SUCCESS and ev.attempt > 1:
         res = {
             "event_id": ev.event_id,
             "state": sm.state.value,
