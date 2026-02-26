@@ -78,6 +78,29 @@ def demo_run(simulate_fail: bool = False) -> dict:
 
 @app.post("/runtime/handle")
 def runtime_handle(ev: RuntimeEvent) -> dict:
+
+    # DRY-RUN: must have zero side-effects (no store read/write)
+    if getattr(ev, "dry_run", False):
+        sm = DeterministicStateMachine()
+        # emulate one attempt without persistence
+        # (same transitions as a normal first run)
+        sm.step(State.PROCESSING)
+        try:
+            sm.step(State.SUCCESS)
+        except Exception:
+            sm.step(State.FAILED)
+
+        transitions = [{"from": t.frm.name, "to": t.to.name} for t in getattr(sm, "transitions", [])] if hasattr(sm, "transitions") else []
+        state_name = getattr(getattr(sm, "state", None), "name", "SUCCESS")
+
+        return {
+            "event_id": ev.event_id,
+            "state": state_name,
+            "is_new": 1,
+            "is_duplicate": False,
+            "transitions": transitions,
+        }
+
     stored = _EVENTS.get(ev.event_id)
     sm = _replay(stored.transitions) if stored else DeterministicStateMachine()
 
