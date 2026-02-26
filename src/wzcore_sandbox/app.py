@@ -91,11 +91,11 @@ def runtime_handle(ev: RuntimeEvent) -> dict:
             sm.step(State.FAILED)
 
         transitions = (
-    [{"from": t.frm.name, "to": t.to.name} for t in getattr(sm, "transitions", [])]
-    if hasattr(sm, "transitions")
-    else []
-)
-state_name = getattr(getattr(sm, "state", None), "name", "SUCCESS")
+            [{"from": t.frm.name, "to": t.to.name} for t in getattr(sm, "transitions", [])]
+            if hasattr(sm, "transitions")
+            else []
+        )
+        state_name = getattr(getattr(sm, "state", None), "name", "SUCCESS")
 
         return {
             "event_id": ev.event_id,
