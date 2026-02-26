@@ -1,12 +1,54 @@
 from __future__ import annotations
-import time
-from fastapi import FastAPI
-from .state_machine import DeterministicStateMachine, State
 
-app = FastAPI(title="WZCore Sandbox", version="0.1.0")
+import time
+from dataclasses import dataclass
+from typing import Dict, List
+
+from fastapi import FastAPI
+from pydantic import BaseModel, Field
+
+from .state_machine import DeterministicStateMachine, State, Transition
+app = FastAPI(title="WZCore Sandbox", version="0.2.0")
 
 _boot_ts = time.time()
-_sm = DeterministicStateMachine()
+
+
+# ----------------------------
+# Runtime: minimal in-memory store
+# ----------------------------
+
+@dataclass
+class StoredEvent:
+    event_id: str
+    transitions: List[Transition]
+    updated_ts: float
+
+
+_EVENTS: Dict[str, StoredEvent] = {}
+
+
+class RuntimeEvent(BaseModel):
+    event_id: str = Field(min_length=1)
+    attempt: int = Field(ge=1, default=1)
+    simulate_fail: bool = False
+
+
+def _replay(transitions: List[Transition]) -> DeterministicStateMachine:
+    sm = DeterministicStateMachine()
+    if not transitions:
+        return sm
+    # Guard against corrupted store: first transition must originate from INIT
+    if transitions[0].frm != State.INIT:
+        raise ValueError("Corrupted stored transitions: first transition not from INIT")
+    for t in transitions:
+        sm.step(t.to)
+    return sm
+
+
+def _persist(event_id: str, sm: DeterministicStateMachine) -> StoredEvent:
+    st = StoredEvent(event_id=event_id, transitions=list(sm.transitions), updated_ts=time.time())
+    _EVENTS[event_id] = st
+    return st
 
 
 @app.get("/health")
@@ -17,17 +59,58 @@ def health() -> dict:
 @app.post("/demo/run")
 def demo_run(simulate_fail: bool = False) -> dict:
     # deterministic demo path: INIT -> PROCESSING -> (FAILED -> PROCESSING) -> SUCCESS
-    if _sm.state == State.INIT:
-        _sm.step(State.PROCESSING)
+    sm = DeterministicStateMachine()
+    if sm.state == State.INIT:
+        sm.step(State.PROCESSING)
 
-    if simulate_fail and _sm.state == State.PROCESSING:
-        _sm.step(State.FAILED)
-        _sm.step(State.PROCESSING)
+    if simulate_fail and sm.state == State.PROCESSING:
+        sm.step(State.FAILED)
+        sm.step(State.PROCESSING)
 
-    if _sm.state == State.PROCESSING:
-        _sm.step(State.SUCCESS)
+    if sm.state == State.PROCESSING:
+        sm.step(State.SUCCESS)
 
     return {
-        "state": _sm.state.value,
-        "transitions": [{"from": t.frm.value, "to": t.to.value} for t in _sm.transitions],
+        "state": sm.state.value,
+        "transitions": [{"from": t.frm.value, "to": t.to.value} for t in sm.transitions],
+    }
+
+
+@app.post("/runtime/handle")
+def runtime_handle(ev: RuntimeEvent) -> dict:
+    stored = _EVENTS.get(ev.event_id)
+    sm = _replay(stored.transitions) if stored else DeterministicStateMachine()
+
+    # exactly-once-ish: if already SUCCESS -> return stable result
+    if sm.state == State.SUCCESS:
+        return {
+            "event_id": ev.event_id,
+            "state": sm.state.value,
+            "transitions": [{"from": t.frm.value, "to": t.to.value} for t in sm.transitions],
+            "is_duplicate": True,
+        }
+
+    # deterministic progression
+    if sm.state == State.INIT:
+        sm.step(State.PROCESSING)
+
+    # optional deterministic fail path (caller-controlled)
+    if ev.simulate_fail and sm.state == State.PROCESSING:
+        sm.step(State.FAILED)
+
+    # retry path: FAILED -> PROCESSING on next handle call
+    if sm.state == State.FAILED:
+        sm.step(State.PROCESSING)
+
+    # complete if processing
+    if sm.state == State.PROCESSING:
+        sm.step(State.SUCCESS)
+
+    _persist(ev.event_id, sm)
+
+    return {
+        "event_id": ev.event_id,
+        "state": sm.state.value,
+        "transitions": [{"from": t.frm.value, "to": t.to.value} for t in sm.transitions],
+        "is_duplicate": False,
     }
