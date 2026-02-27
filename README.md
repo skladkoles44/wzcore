@@ -348,3 +348,5 @@ INSERT OR IGNORE INTO messages(...)
 
 Документ:
 PACK_S_INBOUND_MSGID_IDEMPOTENCY.md
+
+- PACK-S: inbound webhook idempotency (msg_id) — docs/runtime/PACK_S_INBOUND_MSGID_IDEMPOTENCY.md
