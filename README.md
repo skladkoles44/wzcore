@@ -307,3 +307,9 @@ Tests passing ✔
 
 If you’re evaluating this repository: run it, call /runtime/handle, replay events, inspect transitions.
 It should behave deterministically every time.
+
+---
+
+### Delivery strict mode
+
+See: docs/runtime/DELIVERY_STRICT_MODE.md

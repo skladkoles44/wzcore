@@ -7,3 +7,13 @@
 - Sequence diagram added
 - README rewritten
 - License and versioning introduced
+
+## 2026-02-27
+- Delivery queue hardened (strict idempotency)
+- UNIQUE(event_id, dest_channel, recipient_id)
+- Producer uses ON CONFLICT DO NOTHING
+
+## 2026-02-27
+- Delivery queue hardened (strict idempotency)
+- UNIQUE(event_id, dest_channel, recipient_id)
+- Producer uses ON CONFLICT DO NOTHING
