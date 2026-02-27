@@ -313,3 +313,38 @@ It should behave deterministically every time.
 ### Delivery strict mode
 
 See: docs/runtime/DELIVERY_STRICT_MODE.md
+Runtime notes
+PACK-S — inbound webhook idempotency (msg_id)
+
+Система защищена от дублей входящих вебхуков MAX на уровне базы данных и кода.
+
+База данных
+
+Создан partial UNIQUE index:
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_messages_in_msgid
+ON messages(msg_id)
+WHERE direction='in' 
+  AND msg_id IS NOT NULL 
+  AND trim(msg_id)<>'';
+
+Это гарантирует, что один и тот же msg_id для входящего сообщения не может быть записан дважды.
+
+Код
+
+В /opt/max-bot1/app/db_ext.py вставка в messages выполняется через:
+
+INSERT OR IGNORE INTO messages(...)
+
+Если webhook приходит повторно, запись будет проигнорирована без падения процесса.
+
+Результат
+
+Повторная доставка webhook не создаёт дубли в истории.
+
+История inbound сообщений стала идемпотентной.
+
+Процесс устойчив к повторной доставке событий со стороны провайдера.
+
+Документ:
+PACK_S_INBOUND_MSGID_IDEMPOTENCY.md
