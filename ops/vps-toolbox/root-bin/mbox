@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+G="\033[92m"; R="\033[0m"
+
+usage() {
+  cat <<USG
+mbox — MAX toolbox (single-line-safe helpers)
+
+USAGE:
+  mbox help
+  mbox dbinv [DB]
+  mbox fk [DB]
+  mbox svc <unit>
+  mbox logs <unit> [N]
+  mbox health [URL]
+  mbox snap <unit> [DB]
+  mbox disk
+  mbox ports [PATTERN]
+  mbox grepbad [ROOT]
+
+Defaults:
+  DB=/var/lib/max-bot1/bot.db
+  URL=http://127.0.0.1:8000/health
+USG
+}
+
+cmd="${1:-help}"; shift || true
+DB_DEFAULT="/var/lib/max-bot1/bot.db"
+
+case "$cmd" in
+  help|-h|--help) usage;;
+
+  dbinv)
+    db="${1:-$DB_DEFAULT}"
+    printf "%b\n" "${G}===== BEGIN DB INVARIANTS =====${R}"
+    sqlite3 "$db" -cmd ".headers off" -cmd ".mode list" \
+      "SELECT bad_out, COUNT(*) FROM messages WHERE direction=out AND (msg_id IS NULL OR trim(msg_id)=);" \
+      "SELECT out_total, COUNT(*) FROM messages WHERE direction=out;"
+    printf "%b\n" "${G}===== END DB INVARIANTS =====${R}"
+    ;;
+
+  fk)
+    db="${1:-$DB_DEFAULT}"
+    printf "%b\n" "${G}===== BEGIN FK CHECK =====${R}"
+    sqlite3 "$db" "PRAGMA foreign_key_check;"
+    printf "%b\n" "${G}===== END FK CHECK =====${R}"
+    ;;
+
+  svc)
+    unit="${1:?unit required}"
+    printf "%b\n" "${G}===== BEGIN SVC $unit status =====${R}"
+    systemctl is-active "$unit" || true
+    systemctl --no-pager --full status "$unit" | sed -n "1,20p"
+    printf "%b\n" "${G}===== END SVC $unit status =====${R}"
+    ;;
+
+  logs)
+    unit="${1:?unit required}"; n="${2:-80}"
+    printf "%b\n" "${G}===== BEGIN LOGS $unit (last $n) =====${R}"
+    journalctl -u "$unit" -n "$n" --no-pager || true
+    printf "%b\n" "${G}===== END LOGS $unit =====${R}"
+    ;;
+
+  health)
+    url="${1:-http://127.0.0.1:8000/health}"
+    printf "%b\n" "${G}===== BEGIN HEALTH $url =====${R}"
+    curl -fsS "$url" || true
+    echo
+    printf "%b\n" "${G}===== END HEALTH =====${R}"
+    ;;
+
+  snap)
+    unit="${1:?unit required}"; db="${2:-$DB_DEFAULT}"
+    printf "%b\n" "${G}===== BEGIN SNAP $unit =====${R}"
+    df -hT | sed -n "1,8p"
+    echo
+    systemctl --no-pager --full status "$unit" | sed -n "1,18p" || true
+    echo
+    sqlite3 "$db" -cmd ".headers off" -cmd ".mode list" \
+      "SELECT bad_out, COUNT(*) FROM messages WHERE direction=out AND (msg_id IS NULL OR trim(msg_id)=);" \
+      "SELECT out_total, COUNT(*) FROM messages WHERE direction=out;" \
+      "PRAGMA foreign_key_check;"
+    printf "%b\n" "${G}===== END SNAP $unit =====${R}"
+    ;;
+
+  disk)
+    printf "%b\n" "${G}===== BEGIN DISK =====${R}"
+    df -hT
+    printf "%b\n" "${G}===== END DISK =====${R}"
+    ;;
+
+  ports)
+    pat="${1:-uvicorn|python|8000}"
+    printf "%b\n" "${G}===== BEGIN PORTS (ss -ltnp | $pat) =====${R}"
+    ss -ltnp 2>/dev/null | grep -E "$pat" || true
+    printf "%b\n" "${G}===== END PORTS =====${R}"
+    ;;
+
+  grepbad)
+    root="${1:-/opt/max-bot1/app}"
+    printf "%b\n" "${G}===== BEGIN GREPBAD (msg_id=None/out) =====${R}"
+    grep -RIn --include="*.py" -E "msg_id\\s*=\\s*None|direction\\s*=\\s*[\""]out[\""]" "$root" | head -200 || true
+    printf "%b\n" "${G}===== END GREPBAD =====${R}"
+    ;;
+
+  *)
+    echo "Unknown command: $cmd" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

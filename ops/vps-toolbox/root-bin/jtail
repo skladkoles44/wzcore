@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+name="${1:?usage: jtail <name> [N]}"; n="${2:-80}"
+svc="$name"; [[ "$svc" != *.service ]] && svc="${svc}.service"
+journalctl -u "$svc" -n "$n" --no-pager

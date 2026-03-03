@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+DB="${1:-/var/lib/max-bot1/bot.db}"
+G="\033[1;92m";R="\033[0m"
+echo -e "${G}===== BEGIN DB INVARIANTS =====${R}"
+sqlite3 "$DB" -cmd ".headers off" -cmd ".mode list" "SELECT 'bad_out', COUNT(*) FROM messages WHERE direction='out' AND (msg_id IS NULL OR trim(msg_id)='');" "SELECT 'out_total', COUNT(*) FROM messages WHERE direction='out';" "PRAGMA foreign_key_check;"
+echo -e "${G}===== END DB INVARIANTS =====${R}"

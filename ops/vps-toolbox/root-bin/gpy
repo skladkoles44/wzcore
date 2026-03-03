@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root="${1:?usage: gpy <dir> <regex>}"; pat="${2:?usage: gpy <dir> <regex>}"
+grep -RIn --include="*.py" -E "$pat" "$root" 2>/dev/null | head -200 || true

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+name="${1:?usage: snap <service-name>}"; svc="$name"; [[ "$svc" != *.service ]] && svc="${svc}.service"
+G="\033[1;92m";R="\033[0m"
+echo -e "${G}===== BEGIN SNAP ${svc} =====${R}"
+date -Is; hostname; echo
+df -hT | sed -n "1,8p"; echo
+systemctl is-active "$svc" || true
+systemctl --no-pager --full status "$svc" | sed -n "1,18p" || true
+echo
+/root/bin/dbcheck || true
+echo
+journalctl -u "$svc" -n 60 --no-pager || true
+echo -e "${G}===== END SNAP ${svc} =====${R}"

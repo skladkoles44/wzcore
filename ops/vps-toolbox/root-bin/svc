@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+G="\033[1;92m";R="\033[0m"
+name="${1:?usage: svc <name> [start|stop|restart|logs N]}"; shift || true
+svc="$name"; [[ "$svc" != *.service ]] && svc="${svc}.service"
+action="${1:-status}"; shift || true
+echo -e "${G}===== BEGIN SVC ${svc} ${action} =====${R}"
+case "$action" in start|stop|restart) systemctl "$action" "$svc";; logs) n="${1:-80}"; journalctl -u "$svc" -n "$n" --no-pager;; status) :;; *) echo "bad action: $action" >&2; exit 2;; esac
+systemctl is-active "$svc" || true
+systemctl --no-pager --full status "$svc" | sed -n "1,18p" || true
+echo -e "${G}===== END SVC ${svc} ${action} =====${R}"
